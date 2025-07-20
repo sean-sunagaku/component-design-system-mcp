@@ -20,10 +20,12 @@ export interface PropInfo {
 }
 
 export interface StyleInfo {
+  name?: string;
   property: string;
   value: string;
   frequency: number;
-  context: 'className' | 'style' | 'theme';
+  context: 'className' | 'style' | 'theme' | 'StyleSheet';
+  properties?: string;
 }
 
 export interface Config {

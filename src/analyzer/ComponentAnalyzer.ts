@@ -189,12 +189,28 @@ export class ComponentAnalyzer {
     const styles: StyleInfo[] = [];
 
     if (framework === 'react-native') {
-      const styleSheetRegex = /StyleSheet\.create\s*\(\s*{([^}]+)}\s*\)/g;
-      let match;
-      while ((match = styleSheetRegex.exec(content)) !== null) {
-        const stylesContent = match[1];
-        const extractedStyles = this.parseReactNativeStyles(stylesContent);
-        styles.push(...extractedStyles);
+      const styleSheetStart = content.indexOf('StyleSheet.create(');
+      if (styleSheetStart !== -1) {
+        const openBraceIndex = content.indexOf('{', styleSheetStart);
+        if (openBraceIndex !== -1) {
+          let braceCount = 1;
+          let currentIndex = openBraceIndex + 1;
+          
+          while (currentIndex < content.length && braceCount > 0) {
+            if (content[currentIndex] === '{') {
+              braceCount++;
+            } else if (content[currentIndex] === '}') {
+              braceCount--;
+            }
+            currentIndex++;
+          }
+          
+          if (braceCount === 0) {
+            const stylesContent = content.substring(openBraceIndex + 1, currentIndex - 1);
+            const extractedStyles = this.parseReactNativeStyles(stylesContent);
+            styles.push(...extractedStyles);
+          }
+        }
       }
     } else if (framework === 'tailwind') {
       const classNameRegex = /className=["']([^"']+)["']/g;
@@ -219,20 +235,25 @@ export class ComponentAnalyzer {
 
   private parseReactNativeStyles(stylesContent: string): StyleInfo[] {
     const styles: StyleInfo[] = [];
-    const lines = stylesContent.split('\n');
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('//')) continue;
-
-      const styleMatch = trimmed.match(/(\w+):\s*([^,]+)/);
-      if (styleMatch) {
-        const [, property, value] = styleMatch;
+    
+    const styleObjectRegex = /(\w+):\s*{([^}]+)}/g;
+    let styleMatch;
+    
+    while ((styleMatch = styleObjectRegex.exec(stylesContent)) !== null) {
+      const styleName = styleMatch[1];
+      const styleProperties = styleMatch[2];
+      
+      const propertyRegex = /(\w+):\s*([^,\n]+)/g;
+      let propMatch;
+      
+      while ((propMatch = propertyRegex.exec(styleProperties)) !== null) {
+        const [, property, value] = propMatch;
         styles.push({
+          name: styleName,
           property,
           value: value.replace(/[,;]$/, '').trim(),
           frequency: 1,
-          context: 'style'
+          context: 'StyleSheet'
         });
       }
     }

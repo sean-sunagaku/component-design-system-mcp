@@ -31,7 +31,7 @@ export class MCPServer {
   private errorHandler: ErrorHandler;
   private configValidator: ConfigValidator;
 
-  constructor() {
+  constructor(configPath?: string) {
     this.server = new Server(
       {
         name: 'component-design-system-mcp',
@@ -44,7 +44,7 @@ export class MCPServer {
       }
     );
 
-    this.configManager = new ConfigManager();
+    this.configManager = new ConfigManager(configPath);
     this.scanner = new ComponentScanner(this.configManager);
     this.analyzer = new ComponentAnalyzer(this.configManager);
     this.cache = new ComponentCache(this.configManager);
@@ -300,6 +300,55 @@ export class MCPServer {
     };
   }
 
+  public async getComponentDetails(name: string) {
+    if (!name) {
+      throw new Error('Component name is required');
+    }
+
+    const components = await this.getAllComponents();
+    const component = components.find(c => c.name === name);
+
+    if (!component) {
+      throw new Error(`Component '${name}' not found`);
+    }
+
+    return component;
+  }
+
+  public async findSimilarComponents(description: string, threshold: number = 0.3) {
+    if (!description) {
+      throw new Error('Description is required');
+    }
+
+    const components = await this.getAllComponents();
+    
+    const targetComponent = components.find(c => 
+      c.description?.toLowerCase().includes(description.toLowerCase()) ||
+      c.name.toLowerCase().includes(description.toLowerCase())
+    );
+
+    if (targetComponent) {
+      const matches = this.similarityAnalyzer.findSimilarComponents(targetComponent, components, threshold, 10);
+      return matches;
+    }
+
+    const syntheticComponent: ComponentInfo = {
+      name: description,
+      filePath: '',
+      framework: 'unknown' as const,
+      props: [],
+      styles: [],
+      usageExamples: [],
+      dependencies: [],
+      category: 'unknown',
+      description: description,
+      lastModified: new Date()
+    };
+    
+    const matches = this.similarityAnalyzer.findSimilarComponents(syntheticComponent, components, threshold, 10);
+    return matches;
+  }
+
   private async handleFindSimilarComponents(args: any) {
     if (!args.description) {
       throw new Error('Description is required');
@@ -374,6 +423,26 @@ export class MCPServer {
         }
       ]
     };
+  }
+
+  public async getDesignSystem(category?: string) {
+    const cacheKey = `design_system_${category || 'all'}`;
+    
+    let designSystem = this.advancedCache.get<DesignSystemInfo>(cacheKey);
+    
+    if (!designSystem) {
+      const components = await this.getAllComponents();
+      let filteredComponents = components;
+      
+      if (category) {
+        filteredComponents = components.filter(c => c.category === category);
+      }
+      
+      designSystem = this.designSystemAnalyzer.analyzeDesignSystem(filteredComponents);
+      this.advancedCache.set(cacheKey, designSystem, 300);
+    }
+    
+    return designSystem;
   }
 
   private async handleGetDesignSystem(args: any) {
@@ -547,6 +616,20 @@ export class MCPServer {
       .slice(0, 10);
   }
 
+  public async getPerformanceMetrics() {
+    const metrics = this.performanceMonitor.getMetrics();
+    const cacheStats = this.advancedCache.getStats();
+    const errorSummary = this.errorHandler.getErrorSummary();
+
+    return {
+      ...metrics,
+      cache: cacheStats,
+      errors: errorSummary,
+      timestamp: new Date(),
+      uptime: process.uptime ? process.uptime() : 0
+    };
+  }
+
   private async handleGetPerformanceMetrics(args: any) {
     const metrics = this.performanceMonitor.getMetrics();
     const cacheStats = this.advancedCache.getStats();
@@ -567,6 +650,27 @@ export class MCPServer {
           text: JSON.stringify(diagnostics, null, 2)
         }
       ]
+    };
+  }
+
+  public async getErrorReport(severity?: string) {
+    const errors = this.errorHandler.getErrors(severity);
+    const summary = this.errorHandler.getErrorSummary();
+
+    return {
+      total: summary.total,
+      low: summary.low,
+      medium: summary.medium,
+      high: summary.high,
+      critical: summary.critical,
+      errors: errors.map(error => ({
+        message: error.error.message,
+        context: error.context,
+        severity: error.severity,
+        recoverable: error.recoverable,
+        timestamp: error.context.timestamp
+      })),
+      timestamp: new Date()
     };
   }
 
@@ -596,7 +700,7 @@ export class MCPServer {
     };
   }
 
-  private async getAllComponents(): Promise<ComponentInfo[]> {
+  public async getAllComponents(): Promise<ComponentInfo[]> {
     this.performanceMonitor.startTimer('scan');
     
     try {

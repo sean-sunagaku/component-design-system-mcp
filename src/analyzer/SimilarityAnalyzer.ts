@@ -17,8 +17,6 @@ export class SimilarityAnalyzer {
     const matches: ComponentMatch[] = [];
 
     for (const component of allComponents) {
-      if (component.filePath === targetComponent.filePath) continue;
-
       const similarity = this.calculateSimilarity(targetComponent, component);
       
       if (similarity >= threshold) {
@@ -39,6 +37,10 @@ export class SimilarityAnalyzer {
   }
 
   private calculateSimilarity(comp1: ComponentInfo, comp2: ComponentInfo): number {
+    if (comp1.name === comp2.name && comp1.filePath === comp2.filePath) {
+      return 1.0;
+    }
+
     let totalScore = 0;
     let maxScore = 0;
 

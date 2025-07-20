@@ -101,26 +101,26 @@ export class ConfigManager {
   }
 
   public isFileIncluded(filePath: string): boolean {
-    const relativePath = path.relative(process.cwd(), filePath);
-    const normalizedPath = relativePath.replace(/\\/g, '/');
+    const normalizedFilePath = path.resolve(filePath).replace(/\\/g, '/');
     
     const inScanPath = this.config.scanPaths.some(scanPath => {
-      const normalizedScanPath = scanPath.replace(/^\.\//, '').replace(/\\/g, '/');
-      return normalizedPath.startsWith(normalizedScanPath);
+      const normalizedScanPath = path.resolve(scanPath).replace(/\\/g, '/');
+      return normalizedFilePath.startsWith(normalizedScanPath);
     });
 
     if (!inScanPath) return false;
 
     const fileName = path.basename(filePath);
+    const relativePath = path.relative(process.cwd(), filePath).replace(/\\/g, '/');
     const isExcluded = this.config.excludePatterns.some(pattern => {
       if (pattern.includes('*')) {
         const regexPattern = pattern
           .replace(/\./g, '\\.')
           .replace(/\*/g, '.*');
         const regex = new RegExp(regexPattern);
-        return regex.test(fileName) || regex.test(normalizedPath);
+        return regex.test(fileName) || regex.test(relativePath);
       }
-      return normalizedPath.includes(pattern) || fileName.includes(pattern);
+      return relativePath.includes(pattern) || fileName.includes(pattern);
     });
 
     return !isExcluded;
@@ -168,15 +168,20 @@ export class ConfigManager {
     
     regexPattern = regexPattern.replace(/\./g, '\\.');
     
-    regexPattern = regexPattern.replace(/\*\*/g, '.*');
+    regexPattern = regexPattern.replace(/\*\*/g, '__DOUBLE_STAR__');
     
     regexPattern = regexPattern.replace(/\*/g, '[^/]*');
+    
+    regexPattern = regexPattern.replace(/__DOUBLE_STAR__/g, '.*');
     
     regexPattern = '^' + regexPattern + '$';
     
     const regex = new RegExp(regexPattern);
     
-    return regex.test(testPath) || regex.test(fileName);
+    const pathMatch = regex.test(testPath);
+    const fileMatch = regex.test(fileName);
+    
+    return pathMatch || fileMatch;
   }
 
 }
