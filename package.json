@@ -14,15 +14,25 @@
     "lint:fix": "eslint src/**/*.ts --fix",
     "format": "prettier --write src/**/*.ts"
   },
-  "keywords": ["mcp", "component", "design-system", "ai", "analysis"],
+  "keywords": [
+    "mcp",
+    "component",
+    "design-system",
+    "ai",
+    "analysis"
+  ],
   "author": "sean-sunagaku",
   "license": "MIT",
   "dependencies": {
+    "@babel/parser": "^7.28.0",
     "@modelcontextprotocol/sdk": "^1.16.0",
     "@types/node": "^24.0.15",
+    "chokidar": "^4.0.3",
+    "cosmiconfig": "^9.0.0",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "winston": "^3.17.0"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
