@@ -7,40 +7,40 @@
 ```mermaid
 classDiagram
     class MCPServer {
-        -server: Server
-        -scanner: ComponentScanner
-        -analyzer: ComponentAnalyzer
-        -cache: CacheManager
-        -config: ConfigManager
-        -performanceMonitor: PerformanceMonitor
-        -errorReporter: ErrorReporter
-        +start(): void
-        +stop(): void
-        +handleToolCall(name: string, args: any): Promise<any>
+        -server Server
+        -scanner ComponentScanner
+        -analyzer ComponentAnalyzer
+        -cache CacheManager
+        -config ConfigManager
+        -performanceMonitor PerformanceMonitor
+        -errorReporter ErrorReporter
+        +start() void
+        +stop() void
+        +handleToolCall(name, args) Promise
     }
 
     class ConfigManager {
-        -config: ComponentMCPConfig
-        -configPath: string
-        +loadConfig(): ComponentMCPConfig
-        +validateConfig(config: any): void
-        +getDefaultConfig(): ComponentMCPConfig
-        +watchConfig(): void
+        -config ComponentMCPConfig
+        -configPath string
+        +loadConfig() ComponentMCPConfig
+        +validateConfig(config) void
+        +getDefaultConfig() ComponentMCPConfig
+        +watchConfig() void
     }
 
     class ComponentScanner {
-        -config: ComponentMCPConfig
-        +scanForComponents(): Promise<string[]>
-        -shouldExclude(filePath: string): boolean
-        -isComponentFile(filePath: string): boolean
+        -config ComponentMCPConfig
+        +scanForComponents() Promise
+        -shouldExclude(filePath) boolean
+        -isComponentFile(filePath) boolean
     }
 
     class ComponentAnalyzer {
-        -astAnalyzer: ASTAnalyzer
-        -reactNativeAnalyzer: ReactNativeAnalyzer
-        -tailwindAnalyzer: TailwindAnalyzer
-        +analyzeComponent(filePath: string): Promise<ComponentMetadata>
-        +analyzeMultiple(filePaths: string[]): Promise<ComponentMetadata[]>
+        -astAnalyzer ASTAnalyzer
+        -reactNativeAnalyzer ReactNativeAnalyzer
+        -tailwindAnalyzer TailwindAnalyzer
+        +analyzeComponent(filePath) Promise
+        +analyzeMultiple(filePaths) Promise
     }
 
     MCPServer --> ConfigManager
@@ -56,25 +56,25 @@ classDiagram
 ```mermaid
 classDiagram
     class ASTAnalyzer {
-        +parse(content: string): ParseResult
-        +extractComponentInfo(ast: File): ComponentInfo
-        -findComponentDeclaration(ast: File): NodePath
-        -extractProps(componentPath: NodePath): PropInfo[]
-        -extractJSXElements(componentPath: NodePath): string[]
+        +parse(content) ParseResult
+        +extractComponentInfo(ast) ComponentInfo
+        -findComponentDeclaration(ast) NodePath
+        -extractProps(componentPath) PropInfo
+        -extractJSXElements(componentPath) string
     }
 
     class ReactNativeAnalyzer {
-        +analyzeStyles(ast: File): StyleInfo
-        +extractStyleSheets(ast: File): StyleSheet[]
-        +isScreenComponent(metadata: ComponentMetadata): boolean
-        -parseStyleSheet(node: Node): StyleSheet
+        +analyzeStyles(ast) StyleInfo
+        +extractStyleSheets(ast) StyleSheet
+        +isScreenComponent(metadata) boolean
+        -parseStyleSheet(node) StyleSheet
     }
 
     class TailwindAnalyzer {
-        +extractTailwindClasses(ast: File): string[]
-        +analyzeClassNames(ast: File): ClassNameInfo[]
-        +extractDesignTokens(classes: string[]): DesignToken[]
-        -parseClassName(node: Node): string[]
+        +extractTailwindClasses(ast) string
+        +analyzeClassNames(ast) ClassNameInfo
+        +extractDesignTokens(classes) DesignToken
+        -parseClassName(node) string
     }
 
     ComponentAnalyzer --> ASTAnalyzer
@@ -87,41 +87,41 @@ classDiagram
 ```mermaid
 classDiagram
     class CacheManager {
-        -cache: Map<string, CacheEntry>
-        -fileWatcher: FileWatcher
-        -config: CacheConfig
-        +get(key: string): ComponentMetadata
-        +set(key: string, value: ComponentMetadata): void
-        +invalidate(key: string): void
-        +clear(): void
-        +getStats(): CacheStats
+        -cache Map
+        -fileWatcher FileWatcher
+        -config CacheConfig
+        +get(key) ComponentMetadata
+        +set(key, value) void
+        +invalidate(key) void
+        +clear() void
+        +getStats() CacheStats
     }
 
     class FileWatcher {
-        -watcher: FSWatcher
-        -callbacks: Map<string, Function>
-        +watch(paths: string[]): void
-        +unwatch(path: string): void
-        +on(event: string, callback: Function): void
-        -handleChange(path: string): void
+        -watcher FSWatcher
+        -callbacks Map
+        +watch(paths) void
+        +unwatch(path) void
+        +on(event, callback) void
+        -handleChange(path) void
     }
 
     class PerformanceMonitor {
-        -metrics: Map<string, Metric>
-        -startTimes: Map<string, number>
-        +startTimer(operation: string): void
-        +endTimer(operation: string): void
-        +recordMetric(name: string, value: number): void
-        +getMetrics(): PerformanceMetrics
+        -metrics Map
+        -startTimes Map
+        +startTimer(operation) void
+        +endTimer(operation) void
+        +recordMetric(name, value) void
+        +getMetrics() PerformanceMetrics
     }
 
     class ErrorReporter {
-        -errors: ErrorEntry[]
-        -maxErrors: number
-        +reportError(error: Error, severity: ErrorSeverity): void
-        +getErrors(severity?: ErrorSeverity): ErrorEntry[]
-        +clearErrors(): void
-        +getSummary(): ErrorSummary
+        -errors ErrorEntry
+        -maxErrors number
+        +reportError(error, severity) void
+        +getErrors(severity) ErrorEntry
+        +clearErrors() void
+        +getSummary() ErrorSummary
     }
 
     CacheManager --> FileWatcher
@@ -132,18 +132,18 @@ classDiagram
 ```mermaid
 classDiagram
     class SimilarityAnalyzer {
-        +findSimilarComponents(target: ComponentMetadata, all: ComponentMetadata[]): SimilarComponent[]
-        -generateFeatureVector(component: ComponentMetadata): number[]
-        -calculateCosineSimilarity(vec1: number[], vec2: number[]): number
-        -normalizeVector(vector: number[]): number[]
+        +findSimilarComponents(target, all) SimilarComponent
+        -generateFeatureVector(component) number
+        -calculateCosineSimilarity(vec1, vec2) number
+        -normalizeVector(vector) number
     }
 
     class DesignSystemUtils {
-        +extractDesignTokens(components: ComponentMetadata[]): DesignSystem
-        +findCommonPatterns(components: ComponentMetadata[]): Pattern[]
-        +categorizeComponents(components: ComponentMetadata[]): Map<string, ComponentMetadata[]>
-        -analyzeColorTokens(styles: StyleInfo[]): ColorToken[]
-        -analyzeSpacingTokens(styles: StyleInfo[]): SpacingToken[]
+        +extractDesignTokens(components) DesignSystem
+        +findCommonPatterns(components) Pattern
+        +categorizeComponents(components) Map
+        -analyzeColorTokens(styles) ColorToken
+        -analyzeSpacingTokens(styles) SpacingToken
     }
 ```
 
@@ -152,40 +152,40 @@ classDiagram
 ### データフローと依存関係
 
 ```mermaid
-graph TB
-    subgraph "Entry Point"
+flowchart TB
+    subgraph EP ["Entry Point"]
         A[index.ts]
     end
 
-    subgraph "Core Layer"
+    subgraph CL ["Core Layer"]
         B[MCPServer]
         C[ConfigManager]
     end
 
-    subgraph "Scanning Layer"
+    subgraph SL ["Scanning Layer"]
         D[ComponentScanner]
     end
 
-    subgraph "Analysis Layer"
+    subgraph AL ["Analysis Layer"]
         E[ComponentAnalyzer]
         F[ASTAnalyzer]
         G[ReactNativeAnalyzer]
         H[TailwindAnalyzer]
     end
 
-    subgraph "Cache Layer"
+    subgraph CHL ["Cache Layer"]
         I[CacheManager]
         J[FileWatcher]
     end
 
-    subgraph "Utility Layer"
+    subgraph UL ["Utility Layer"]
         K[SimilarityAnalyzer]
         L[DesignSystemUtils]
         M[PerformanceMonitor]
         N[ErrorReporter]
     end
 
-    subgraph "Type Definitions"
+    subgraph TD ["Type Definitions"]
         O[types/index.ts]
     end
 
@@ -211,16 +211,20 @@ graph TB
     M --> O
     N --> O
 
-    style A fill:#f96
-    style B fill:#69f
-    style O fill:#9f9
+    classDef entrypoint fill:#ff9999
+    classDef core fill:#6699ff
+    classDef types fill:#99ff99
+    
+    class A entrypoint
+    class B core
+    class O types
 ```
 
 ### MCPツールとモジュールの対応
 
 ```mermaid
-graph LR
-    subgraph "MCP Tools"
+flowchart LR
+    subgraph MT ["MCP Tools"]
         T1[list_components]
         T2[get_component_details]
         T3[find_similar_components]
@@ -231,7 +235,7 @@ graph LR
         T8[get_error_report]
     end
 
-    subgraph "Modules"
+    subgraph MO ["Modules"]
         M1[CacheManager]
         M2[ComponentAnalyzer]
         M3[SimilarityAnalyzer]
@@ -273,9 +277,9 @@ sequenceDiagram
     Server->>Server: registerTools()
     Main->>Server: start()
     Server->>Scanner: scanForComponents()
-    Scanner-->>Server: componentPaths[]
+    Scanner-->>Server: componentPaths
     Server->>Analyzer: analyzeMultiple(paths)
-    Analyzer-->>Server: metadata[]
+    Analyzer-->>Server: metadata
     Server->>Cache: populate(metadata)
 ```
 
@@ -309,7 +313,7 @@ sequenceDiagram
 ## エラーハンドリングフロー
 
 ```mermaid
-graph TD
+flowchart TD
     A[Error Occurs] --> B{Error Type?}
     B -->|Parse Error| C[ASTAnalyzer]
     B -->|File Error| D[Scanner/FileWatcher]
@@ -322,8 +326,8 @@ graph TD
     F --> G
     
     G --> H{Severity?}
-    H -->|Critical| I[Log & Throw]
-    H -->|High| J[Log & Continue]
+    H -->|Critical| I[Log and Throw]
+    H -->|High| J[Log and Continue]
     H -->|Medium/Low| K[Log Only]
     
     I --> L[Client Error Response]

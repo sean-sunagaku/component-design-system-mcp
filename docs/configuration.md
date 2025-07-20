@@ -8,40 +8,41 @@ Component MCP Serverは`component-mcp.config.json`ファイルを使用して動
 
 ```json
 {
-  "scanPaths": ["./src"],
-  "exclude": ["**/*.test.*"],
-  "frameworks": {
-    "reactNative": true,
-    "tailwind": true
-  },
-  "cache": {
-    "enabled": true,
-    "ttl": 3600000,
-    "maxSize": 100
-  },
-  "watch": {
-    "enabled": true,
-    "debounce": 1000
-  },
-  "analysis": {
-    "extractProps": true,
-    "extractStyles": true,
-    "extractDependencies": true,
-    "categorizeComponents": true
-  },
-  "similarity": {
-    "threshold": 0.7,
-    "weights": {
-      "props": 0.3,
-      "styles": 0.2,
-      "structure": 0.3,
-      "dependencies": 0.2
+  "scanPaths": ["./src", "./components", "./screens"],
+  "excludePatterns": [
+    "node_modules",
+    "*.test.*",
+    "*.spec.*",
+    "__tests__",
+    "dist",
+    "build",
+    ".git"
+  ],
+  "frameworks": [
+    {
+      "name": "react-native",
+      "enabled": true,
+      "fileExtensions": [".tsx", ".jsx", ".ts", ".js"],
+      "componentPatterns": ["*Screen.tsx", "*Component.tsx", "*Screen.jsx", "*Component.jsx"],
+      "stylePatterns": ["StyleSheet.create", "styled-components", "style="]
+    },
+    {
+      "name": "tailwind",
+      "enabled": true,
+      "fileExtensions": [".tsx", ".jsx", ".html", ".vue"],
+      "componentPatterns": ["className=", "class="],
+      "stylePatterns": ["@apply", "tailwind.config.*", "className="]
     }
-  },
-  "performance": {
-    "maxConcurrency": 5,
-    "timeout": 30000
-  }
+  ],
+  "componentPatterns": [
+    "**/*Component.{tsx,jsx,ts,js}",
+    "**/*Screen.{tsx,jsx,ts,js}",
+    "**/components/**/*.{tsx,jsx,ts,js}",
+    "**/screens/**/*.{tsx,jsx,ts,js}"
+  ],
+  "cacheEnabled": true,
+  "autoRefresh": true,
+  "refreshInterval": 300
 }
 ```
 
@@ -54,9 +55,9 @@ Component MCP Serverは`component-mcp.config.json`ファイルを使用して動
 ```json
 {
   "scanPaths": [
-    "./src/components",
-    "./src/screens",
-    "./src/shared"
+    "./src",
+    "./components", 
+    "./screens"
   ]
 }
 ```
@@ -66,19 +67,20 @@ Component MCP Serverは`component-mcp.config.json`ファイルを使用して動
 - 複数のパスを指定可能
 - サブディレクトリも自動的にスキャンされる
 
-### exclude（オプション）
+### excludePatterns（オプション）
 
 スキャンから除外するファイルパターンのリストです。
 
 ```json
 {
-  "exclude": [
-    "**/*.test.tsx",
-    "**/*.spec.ts",
-    "**/*.stories.tsx",
-    "**/node_modules/**",
-    "**/dist/**",
-    "**/__tests__/**"
+  "excludePatterns": [
+    "node_modules",
+    "*.test.*",
+    "*.spec.*", 
+    "__tests__",
+    "dist",
+    "build",
+    ".git"
   ]
 }
 ```
@@ -89,67 +91,95 @@ Component MCP Serverは`component-mcp.config.json`ファイルを使用して動
 - `?` - 任意の1文字
 - `{a,b}` - aまたはb
 
-### frameworks（オプション）
+### frameworks（必須）
 
-有効にするフレームワークの設定です。
+フレームワーク固有の設定を配列形式で定義します。
 
 ```json
 {
-  "frameworks": {
-    "reactNative": true,
-    "tailwind": false
-  }
+  "frameworks": [
+    {
+      "name": "react-native",
+      "enabled": true,
+      "fileExtensions": [".tsx", ".jsx", ".ts", ".js"],
+      "componentPatterns": ["*Screen.tsx", "*Component.tsx"],
+      "stylePatterns": ["StyleSheet.create", "styled-components"]
+    },
+    {
+      "name": "tailwind", 
+      "enabled": true,
+      "fileExtensions": [".tsx", ".jsx", ".html", ".vue"],
+      "componentPatterns": ["className=", "class="],
+      "stylePatterns": ["@apply", "tailwind.config.*"]
+    }
+  ]
 }
 ```
 
-**オプション:**
-- `reactNative`: React Nativeコンポーネントの分析を有効化
-- `tailwind`: TailwindCSSを使用したコンポーネントの分析を有効化
+**フレームワーク設定項目:**
+- `name`: フレームワーク名（"react-native" | "tailwind"）
+- `enabled`: 有効/無効フラグ
+- `fileExtensions`: 対象ファイル拡張子
+- `componentPatterns`: コンポーネント検出パターン
+- `stylePatterns`: スタイル検出パターン
 
-### cache（オプション）
+### componentPatterns（オプション）
 
-キャッシュシステムの設定です。
+コンポーネントファイルを特定するためのglobパターンです。
 
 ```json
 {
-  "cache": {
-    "enabled": true,
-    "ttl": 3600000,
-    "maxSize": 100,
-    "persistToDisk": false,
-    "cacheDir": "./.cache/component-mcp"
-  }
+  "componentPatterns": [
+    "**/*Component.{tsx,jsx,ts,js}",
+    "**/*Screen.{tsx,jsx,ts,js}",
+    "**/components/**/*.{tsx,jsx,ts,js}",
+    "**/screens/**/*.{tsx,jsx,ts,js}"
+  ]
+}
+```
+
+### cacheEnabled（オプション）
+
+キャッシュシステムの有効/無効を制御します。
+
+```json
+{
+  "cacheEnabled": true
 }
 ```
 
 **パラメータ:**
-- `enabled`: キャッシュの有効/無効
-- `ttl`: キャッシュの有効期限（ミリ秒）
-- `maxSize`: キャッシュする最大コンポーネント数
-- `persistToDisk`: ディスクへの永続化（開発中）
-- `cacheDir`: キャッシュディレクトリ
+- `true`: キャッシュを有効化（推奨）
+- `false`: キャッシュを無効化（開発時のみ）
 
-### watch（オプション）
+### autoRefresh（オプション）
 
-ファイル監視の設定です。
+ファイル変更の自動検出と再分析を制御します。
 
 ```json
 {
-  "watch": {
-    "enabled": true,
-    "debounce": 1000,
-    "ignore": [
-      "**/.git/**",
-      "**/node_modules/**"
-    ]
-  }
+  "autoRefresh": true
 }
 ```
 
 **パラメータ:**
-- `enabled`: ファイル監視の有効/無効
-- `debounce`: 変更検出のデバウンス時間（ミリ秒）
-- `ignore`: 監視から除外するパターン
+- `true`: ファイル変更を自動検出して再分析
+- `false`: 手動での再起動が必要
+
+### refreshInterval（オプション）
+
+自動更新の間隔を秒単位で設定します。
+
+```json
+{
+  "refreshInterval": 300
+}
+```
+
+**パラメータ:**
+- 数値: 更新間隔（秒）
+- デフォルト: 300秒（5分）
+- 推奨範囲: 60〜600秒
 
 ### analysis（オプション）
 
@@ -234,17 +264,22 @@ Component MCP Serverは`component-mcp.config.json`ファイルを使用して動
 
 ```json
 {
-  "scanPaths": ["./src"],
-  "cache": {
-    "enabled": false
-  },
-  "watch": {
-    "enabled": true,
-    "debounce": 500
-  },
-  "performance": {
-    "maxConcurrency": 3
-  }
+  "scanPaths": ["./src", "./components"],
+  "excludePatterns": [
+    "node_modules",
+    "*.test.*",
+    "__tests__"
+  ],
+  "frameworks": [
+    {
+      "name": "react-native",
+      "enabled": true,
+      "fileExtensions": [".tsx", ".jsx"]
+    }
+  ],
+  "cacheEnabled": false,
+  "autoRefresh": true,
+  "refreshInterval": 60
 }
 ```
 
@@ -252,19 +287,30 @@ Component MCP Serverは`component-mcp.config.json`ファイルを使用して動
 
 ```json
 {
-  "scanPaths": ["./src"],
-  "cache": {
-    "enabled": true,
-    "ttl": 7200000,
-    "maxSize": 200
-  },
-  "watch": {
-    "enabled": false
-  },
-  "performance": {
-    "maxConcurrency": 10,
-    "timeout": 60000
-  }
+  "scanPaths": ["./src", "./components", "./screens"],
+  "excludePatterns": [
+    "node_modules",
+    "*.test.*",
+    "*.spec.*",
+    "__tests__",
+    "dist",
+    "build"
+  ],
+  "frameworks": [
+    {
+      "name": "react-native",
+      "enabled": true,
+      "fileExtensions": [".tsx", ".jsx", ".ts", ".js"]
+    },
+    {
+      "name": "tailwind",
+      "enabled": true,
+      "fileExtensions": [".tsx", ".jsx"]
+    }
+  ],
+  "cacheEnabled": true,
+  "autoRefresh": false,
+  "refreshInterval": 600
 }
 ```
 
@@ -273,15 +319,20 @@ Component MCP Serverは`component-mcp.config.json`ファイルを使用して動
 ```json
 {
   "scanPaths": ["./src"],
-  "cache": {
-    "enabled": false
-  },
-  "watch": {
-    "enabled": false
-  },
-  "analysis": {
-    "analyzeComplexity": true
-  }
+  "excludePatterns": [
+    "node_modules",
+    "*.test.*",
+    "dist"
+  ],
+  "frameworks": [
+    {
+      "name": "react-native",
+      "enabled": true,
+      "fileExtensions": [".tsx", ".jsx", ".ts", ".js"]
+    }
+  ],
+  "cacheEnabled": false,
+  "autoRefresh": false
 }
 ```
 
@@ -326,27 +377,30 @@ MCP_CONFIG_EXTEND=./component-mcp.config.local.json npm start
 **小規模プロジェクト（<100コンポーネント）**
 ```json
 {
-  "cache": {
-    "enabled": false
-  },
-  "performance": {
-    "maxConcurrency": 3
-  }
+  "scanPaths": ["./src"],
+  "cacheEnabled": false,
+  "autoRefresh": true,
+  "refreshInterval": 30
 }
 ```
 
 **大規模プロジェクト（>1000コンポーネント）**
 ```json
 {
-  "cache": {
-    "enabled": true,
-    "ttl": 7200000,
-    "maxSize": 500
-  },
-  "performance": {
-    "maxConcurrency": 10,
-    "batchSize": 20
-  }
+  "scanPaths": ["./src", "./components", "./screens"],
+  "excludePatterns": [
+    "node_modules",
+    "*.test.*",
+    "*.spec.*",
+    "__tests__",
+    "dist",
+    "build",
+    "examples",
+    "stories"
+  ],
+  "cacheEnabled": true,
+  "autoRefresh": true,
+  "refreshInterval": 600
 }
 ```
 
@@ -355,26 +409,39 @@ MCP_CONFIG_EXTEND=./component-mcp.config.local.json npm start
 **React Native専用**
 ```json
 {
-  "frameworks": {
-    "reactNative": true,
-    "tailwind": false
-  },
-  "analysis": {
-    "extractStyles": true
-  }
+  "frameworks": [
+    {
+      "name": "react-native",
+      "enabled": true,
+      "fileExtensions": [".tsx", ".jsx", ".ts", ".js"],
+      "componentPatterns": ["*Screen.tsx", "*Component.tsx"],
+      "stylePatterns": ["StyleSheet.create", "styled-components"]
+    }
+  ],
+  "componentPatterns": [
+    "**/*Screen.{tsx,jsx}",
+    "**/*Component.{tsx,jsx}",
+    "**/screens/**/*.{tsx,jsx}"
+  ]
 }
 ```
 
 **TailwindCSS専用**
 ```json
 {
-  "frameworks": {
-    "reactNative": false,
-    "tailwind": true
-  },
-  "analysis": {
-    "detectPatterns": true
-  }
+  "frameworks": [
+    {
+      "name": "tailwind",
+      "enabled": true,
+      "fileExtensions": [".tsx", ".jsx", ".html"],
+      "componentPatterns": ["className=", "class="],
+      "stylePatterns": ["@apply", "tailwind.config.*"]
+    }
+  ],
+  "componentPatterns": [
+    "**/components/**/*.{tsx,jsx}",
+    "**/pages/**/*.{tsx,jsx}"
+  ]
 }
 ```
 
@@ -383,28 +450,37 @@ MCP_CONFIG_EXTEND=./component-mcp.config.local.json npm start
 **高速スキャン優先**
 ```json
 {
-  "exclude": [
-    "**/*.test.*",
-    "**/*.spec.*",
-    "**/*.stories.*",
-    "**/examples/**"
+  "scanPaths": ["./src/components"],
+  "excludePatterns": [
+    "node_modules",
+    "*.test.*",
+    "*.spec.*",
+    "*.stories.*",
+    "__tests__",
+    "examples",
+    "dist"
   ],
-  "analysis": {
-    "analyzeComplexity": false
-  }
+  "cacheEnabled": true,
+  "autoRefresh": false
 }
 ```
 
 **詳細分析優先**
 ```json
 {
-  "analysis": {
-    "extractProps": true,
-    "extractStyles": true,
-    "extractDependencies": true,
-    "detectPatterns": true,
-    "analyzeComplexity": true
-  }
+  "scanPaths": ["./src", "./components", "./screens", "./shared"],
+  "frameworks": [
+    {
+      "name": "react-native",
+      "enabled": true,
+      "fileExtensions": [".tsx", ".jsx", ".ts", ".js"],
+      "componentPatterns": ["*Screen.*", "*Component.*", "*Hook.*"],
+      "stylePatterns": ["StyleSheet.create", "styled-components", "style="]
+    }
+  ],
+  "cacheEnabled": true,
+  "autoRefresh": true,
+  "refreshInterval": 120
 }
 ```
 

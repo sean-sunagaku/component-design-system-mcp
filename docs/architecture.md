@@ -37,7 +37,7 @@ Scanner → Analyzer → Cache → MCP Tools
 ### データフロー
 
 ```mermaid
-graph LR
+flowchart LR
     A[ファイルシステム] -->|スキャン| B[Scanner]
     B -->|ファイルパス| C[Analyzer]
     C -->|メタデータ| D[Cache]
