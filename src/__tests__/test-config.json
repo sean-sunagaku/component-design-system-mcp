@@ -1,6 +1,6 @@
 {
   "scanPaths": [
-    "/home/ubuntu/repos/component-design-system-mcp/src/__tests__/sample-components"
+    "/workspace/src/__tests__/sample-components"
   ],
   "excludePatterns": [
     "node_modules",
