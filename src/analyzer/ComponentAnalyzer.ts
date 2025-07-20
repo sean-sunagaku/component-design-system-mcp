@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ConfigManager } from '../config/ConfigManager.js';
 import { ComponentInfo, PropInfo, StyleInfo } from '../types';
+import { ASTParser } from '../utils/ASTParser';
 
 export class ComponentAnalyzer {
   constructor(private configManager: ConfigManager) {}
@@ -90,6 +91,46 @@ export class ComponentAnalyzer {
   private extractProps(content: string): PropInfo[] {
     const props: PropInfo[] = [];
 
+    try {
+      const astParser = new ASTParser(content);
+      const interfaces = astParser.extractInterfaces();
+      const typeAliases = astParser.extractTypeAliases();
+
+      for (const interfaceInfo of interfaces) {
+        if (interfaceInfo.name.includes('Props')) {
+          for (const prop of interfaceInfo.properties) {
+            props.push({
+              name: prop.name,
+              type: prop.type,
+              required: !prop.optional,
+              description: undefined
+            });
+          }
+        }
+      }
+
+      for (const typeAlias of typeAliases) {
+        if (typeAlias.name.includes('Props') && typeAlias.type.includes('{')) {
+          const typeProps = this.parsePropsFromTypeString(typeAlias.type);
+          props.push(...typeProps);
+        }
+      }
+
+      if (props.length === 0) {
+        return this.extractPropsWithRegex(content);
+      }
+
+    } catch (error) {
+      console.warn('AST parsing failed, falling back to regex:', error);
+      return this.extractPropsWithRegex(content);
+    }
+
+    return props;
+  }
+
+  private extractPropsWithRegex(content: string): PropInfo[] {
+    const props: PropInfo[] = [];
+
     const interfaceRegex = /interface\s+(\w+Props)\s*{([^}]+)}/g;
     const typeRegex = /type\s+(\w+Props)\s*=\s*{([^}]+)}/g;
 
@@ -108,6 +149,12 @@ export class ComponentAnalyzer {
     }
 
     return props;
+  }
+
+  private parsePropsFromTypeString(typeString: string): PropInfo[] {
+    const props: PropInfo[] = [];
+    const content = typeString.replace(/^[^{]*{/, '').replace(/}[^}]*$/, '');
+    return this.parsePropsFromContent(content);
   }
 
   private parsePropsFromContent(propsContent: string): PropInfo[] {
@@ -142,12 +189,28 @@ export class ComponentAnalyzer {
     const styles: StyleInfo[] = [];
 
     if (framework === 'react-native') {
-      const styleSheetRegex = /StyleSheet\.create\s*\(\s*{([^}]+)}\s*\)/g;
-      let match;
-      while ((match = styleSheetRegex.exec(content)) !== null) {
-        const stylesContent = match[1];
-        const extractedStyles = this.parseReactNativeStyles(stylesContent);
-        styles.push(...extractedStyles);
+      const styleSheetStart = content.indexOf('StyleSheet.create(');
+      if (styleSheetStart !== -1) {
+        const openBraceIndex = content.indexOf('{', styleSheetStart);
+        if (openBraceIndex !== -1) {
+          let braceCount = 1;
+          let currentIndex = openBraceIndex + 1;
+          
+          while (currentIndex < content.length && braceCount > 0) {
+            if (content[currentIndex] === '{') {
+              braceCount++;
+            } else if (content[currentIndex] === '}') {
+              braceCount--;
+            }
+            currentIndex++;
+          }
+          
+          if (braceCount === 0) {
+            const stylesContent = content.substring(openBraceIndex + 1, currentIndex - 1);
+            const extractedStyles = this.parseReactNativeStyles(stylesContent);
+            styles.push(...extractedStyles);
+          }
+        }
       }
     } else if (framework === 'tailwind') {
       const classNameRegex = /className=["']([^"']+)["']/g;
@@ -172,20 +235,25 @@ export class ComponentAnalyzer {
 
   private parseReactNativeStyles(stylesContent: string): StyleInfo[] {
     const styles: StyleInfo[] = [];
-    const lines = stylesContent.split('\n');
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('//')) continue;
-
-      const styleMatch = trimmed.match(/(\w+):\s*([^,]+)/);
-      if (styleMatch) {
-        const [, property, value] = styleMatch;
+    
+    const styleObjectRegex = /(\w+):\s*{([^}]+)}/g;
+    let styleMatch;
+    
+    while ((styleMatch = styleObjectRegex.exec(stylesContent)) !== null) {
+      const styleName = styleMatch[1];
+      const styleProperties = styleMatch[2];
+      
+      const propertyRegex = /(\w+):\s*([^,\n]+)/g;
+      let propMatch;
+      
+      while ((propMatch = propertyRegex.exec(styleProperties)) !== null) {
+        const [, property, value] = propMatch;
         styles.push({
+          name: styleName,
           property,
           value: value.replace(/[,;]$/, '').trim(),
           frequency: 1,
-          context: 'style'
+          context: 'StyleSheet'
         });
       }
     }

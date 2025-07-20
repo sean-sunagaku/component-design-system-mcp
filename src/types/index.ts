@@ -20,10 +20,12 @@ export interface PropInfo {
 }
 
 export interface StyleInfo {
+  name?: string;
   property: string;
   value: string;
   frequency: number;
-  context: 'className' | 'style' | 'theme';
+  context: 'className' | 'style' | 'theme' | 'StyleSheet';
+  properties?: string;
 }
 
 export interface Config {
@@ -142,9 +144,12 @@ export interface CategoryInfo {
 export interface ScreenPattern {
   name: string;
   category: string;
-  structure: ComponentStructure;
+  framework: 'react-native' | 'tailwind' | 'unknown';
+  commonProps: PropInfo[];
   commonStyles: StyleInfo[];
-  usageExamples: string[];
+  usageFrequency: number;
+  examples: string[];
+  description: string;
 }
 
 export interface ComponentStructure {

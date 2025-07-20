@@ -1,0 +1,54 @@
+{
+  "scanPaths": [
+    "/home/ubuntu/repos/component-design-system-mcp/src/__tests__/sample-components"
+  ],
+  "excludePatterns": [
+    "node_modules",
+    "dist",
+    "*.test.ts"
+  ],
+  "frameworks": [
+    {
+      "name": "react-native",
+      "enabled": true,
+      "fileExtensions": [
+        ".tsx",
+        ".jsx",
+        ".ts",
+        ".js"
+      ],
+      "componentPatterns": [
+        "*Button.tsx",
+        "*Card.tsx"
+      ],
+      "stylePatterns": [
+        "StyleSheet.create",
+        "styles ="
+      ]
+    },
+    {
+      "name": "tailwind",
+      "enabled": true,
+      "fileExtensions": [
+        ".tsx",
+        ".jsx"
+      ],
+      "componentPatterns": [
+        "className=",
+        "class="
+      ],
+      "stylePatterns": [
+        "className=",
+        "bg-",
+        "text-"
+      ]
+    }
+  ],
+  "componentPatterns": [
+    "**/*.tsx",
+    "**/*.ts"
+  ],
+  "cacheEnabled": false,
+  "autoRefresh": false,
+  "refreshInterval": 300
+}

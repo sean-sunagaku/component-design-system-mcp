@@ -101,26 +101,26 @@ export class ConfigManager {
   }
 
   public isFileIncluded(filePath: string): boolean {
-    const relativePath = path.relative(process.cwd(), filePath);
-    const normalizedPath = relativePath.replace(/\\/g, '/');
+    const normalizedFilePath = path.resolve(filePath).replace(/\\/g, '/');
     
     const inScanPath = this.config.scanPaths.some(scanPath => {
-      const normalizedScanPath = scanPath.replace(/^\.\//, '').replace(/\\/g, '/');
-      return normalizedPath.startsWith(normalizedScanPath);
+      const normalizedScanPath = path.resolve(scanPath).replace(/\\/g, '/');
+      return normalizedFilePath.startsWith(normalizedScanPath);
     });
 
     if (!inScanPath) return false;
 
     const fileName = path.basename(filePath);
+    const relativePath = path.relative(process.cwd(), filePath).replace(/\\/g, '/');
     const isExcluded = this.config.excludePatterns.some(pattern => {
       if (pattern.includes('*')) {
         const regexPattern = pattern
           .replace(/\./g, '\\.')
           .replace(/\*/g, '.*');
         const regex = new RegExp(regexPattern);
-        return regex.test(fileName) || regex.test(normalizedPath);
+        return regex.test(fileName) || regex.test(relativePath);
       }
-      return normalizedPath.includes(pattern) || fileName.includes(pattern);
+      return relativePath.includes(pattern) || fileName.includes(pattern);
     });
 
     return !isExcluded;
@@ -140,26 +140,48 @@ export class ConfigManager {
     if (!supportedByFramework) return false;
 
     return this.config.componentPatterns.some(pattern => {
-      let regexPattern = pattern;
-      
-      regexPattern = regexPattern.replace(/\{([^}]+)\}/g, '($1)').replace(/,/g, '|');
-      
-      regexPattern = regexPattern.replace(/\*\*/g, '___DOUBLESTAR___');
-      regexPattern = regexPattern.replace(/\*/g, '___SINGLESTAR___');
-      
-      regexPattern = regexPattern.replace(/___DOUBLESTAR___/g, '.*');
-      regexPattern = regexPattern.replace(/___SINGLESTAR___/g, '[^/]*');
-      
-      regexPattern = regexPattern.replace(/\.(?![*])/g, '\\.');
-      
-      if (pattern.startsWith('**/')) {
-        regexPattern = '(^|.*/)' + regexPattern.substring(4);
-      }
-      
-      const regex = new RegExp(regexPattern);
-      const testPath = relativePath.startsWith('./') ? relativePath.substring(2) : relativePath;
-      
-      return regex.test(testPath) || regex.test(fileName);
+      return this.matchesGlobPattern(relativePath, fileName, pattern);
     });
   }
+
+  private matchesGlobPattern(relativePath: string, fileName: string, pattern: string): boolean {
+    const testPath = relativePath.startsWith('./') ? relativePath.substring(2) : relativePath;
+    
+    if (pattern.includes('{') && pattern.includes('}')) {
+      const braceMatch = pattern.match(/\{([^}]+)\}/);
+      if (braceMatch) {
+        const extensions = braceMatch[1].split(',');
+        const basePattern = pattern.replace(/\{[^}]+\}/, '');
+        
+        return extensions.some(ext => {
+          const expandedPattern = basePattern + ext.trim();
+          return this.matchesSimpleGlobPattern(testPath, fileName, expandedPattern);
+        });
+      }
+    }
+    
+    return this.matchesSimpleGlobPattern(testPath, fileName, pattern);
+  }
+
+  private matchesSimpleGlobPattern(testPath: string, fileName: string, pattern: string): boolean {
+    let regexPattern = pattern;
+    
+    regexPattern = regexPattern.replace(/\./g, '\\.');
+    
+    regexPattern = regexPattern.replace(/\*\*/g, '__DOUBLE_STAR__');
+    
+    regexPattern = regexPattern.replace(/\*/g, '[^/]*');
+    
+    regexPattern = regexPattern.replace(/__DOUBLE_STAR__/g, '.*');
+    
+    regexPattern = '^' + regexPattern + '$';
+    
+    const regex = new RegExp(regexPattern);
+    
+    const pathMatch = regex.test(testPath);
+    const fileMatch = regex.test(fileName);
+    
+    return pathMatch || fileMatch;
+  }
+
 }
