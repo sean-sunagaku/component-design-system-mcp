@@ -12,6 +12,9 @@ import { SimilarityAnalyzer } from '../analyzer/SimilarityAnalyzer.js';
 import { DesignSystemAnalyzer } from '../analyzer/DesignSystemAnalyzer.js';
 import { CategoryDetector } from '../analyzer/CategoryDetector.js';
 import { AdvancedCache } from '../cache/AdvancedCache.js';
+import { PerformanceMonitor } from '../utils/PerformanceMonitor.js';
+import { ErrorHandler } from '../utils/ErrorHandler.js';
+import { ConfigValidator } from '../utils/ConfigValidator.js';
 import { ComponentInfo, ComponentSummary, ComponentMatch, DesignSystemInfo, CategoryInfo, ScreenPattern } from '../types/index.js';
 
 export class MCPServer {
@@ -24,6 +27,9 @@ export class MCPServer {
   private similarityAnalyzer: SimilarityAnalyzer;
   private designSystemAnalyzer: DesignSystemAnalyzer;
   private categoryDetector: CategoryDetector;
+  private performanceMonitor: PerformanceMonitor;
+  private errorHandler: ErrorHandler;
+  private configValidator: ConfigValidator;
 
   constructor() {
     this.server = new Server(
@@ -46,8 +52,51 @@ export class MCPServer {
     this.similarityAnalyzer = new SimilarityAnalyzer();
     this.designSystemAnalyzer = new DesignSystemAnalyzer();
     this.categoryDetector = new CategoryDetector();
+    this.performanceMonitor = new PerformanceMonitor();
+    this.errorHandler = new ErrorHandler();
+    this.configValidator = new ConfigValidator();
+
+    this.validateConfiguration();
 
     this.setupHandlers();
+  }
+
+  private validateConfiguration(): void {
+    try {
+      const config = this.configManager.getConfig();
+      const validation = this.configValidator.validateConfig(config);
+      
+      if (!validation.valid) {
+        for (const error of validation.errors) {
+          this.errorHandler.handleError(
+            new Error(error),
+            { operation: 'config_validation', timestamp: new Date() },
+            'high'
+          );
+        }
+      }
+
+      for (const warning of validation.warnings) {
+        console.warn('Configuration warning:', warning);
+      }
+
+      const envValidation = this.configValidator.validateEnvironment();
+      if (!envValidation.valid) {
+        for (const error of envValidation.errors) {
+          this.errorHandler.handleError(
+            new Error(error),
+            { operation: 'environment_validation', timestamp: new Date() },
+            'critical'
+          );
+        }
+      }
+    } catch (error) {
+      this.errorHandler.handleError(
+        error instanceof Error ? error : new Error(String(error)),
+        { operation: 'config_validation', timestamp: new Date() },
+        'critical'
+      );
+    }
   }
 
   private setupHandlers(): void {
@@ -136,6 +185,27 @@ export class MCPServer {
               }
             }
           }
+        },
+        {
+          name: 'get_performance_metrics',
+          description: 'Get performance metrics and system diagnostics',
+          inputSchema: {
+            type: 'object',
+            properties: {}
+          }
+        },
+        {
+          name: 'get_error_report',
+          description: 'Get error report and system health information',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              severity: {
+                type: 'string',
+                description: 'Filter errors by severity (low, medium, high, critical) (optional)'
+              }
+            }
+          }
         }
       ]
     }));
@@ -157,6 +227,10 @@ export class MCPServer {
             return await this.handleGetAvailableCategories(args);
           case 'get_screen_patterns':
             return await this.handleGetScreenPatterns(args);
+          case 'get_performance_metrics':
+            return await this.handleGetPerformanceMetrics(args);
+          case 'get_error_report':
+            return await this.handleGetErrorReport(args);
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
@@ -473,28 +547,105 @@ export class MCPServer {
       .slice(0, 10);
   }
 
-  private async getAllComponents(): Promise<ComponentInfo[]> {
-    const cachedComponents = this.cache.getAllComponents();
-    if (cachedComponents.length > 0) {
-      return cachedComponents;
-    }
+  private async handleGetPerformanceMetrics(args: any) {
+    const metrics = this.performanceMonitor.getMetrics();
+    const cacheStats = this.advancedCache.getStats();
+    const errorSummary = this.errorHandler.getErrorSummary();
 
-    const filePaths = await this.scanner.scanForComponents();
-    const components: ComponentInfo[] = [];
+    const diagnostics = {
+      performance: metrics,
+      cache: cacheStats,
+      errors: errorSummary,
+      timestamp: new Date(),
+      uptime: process.uptime ? process.uptime() : 0
+    };
 
-    for (const filePath of filePaths) {
-      try {
-        const component = await this.analyzer.analyzeComponent(filePath);
-        if (component) {
-          components.push(component);
-          this.cache.setComponent(component);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(diagnostics, null, 2)
         }
-      } catch (error) {
-        console.warn(`Failed to analyze component at ${filePath}:`, error);
-      }
-    }
+      ]
+    };
+  }
 
-    return components;
+  private async handleGetErrorReport(args: any) {
+    const errors = this.errorHandler.getErrors(args.severity);
+    const summary = this.errorHandler.getErrorSummary();
+
+    const report = {
+      summary,
+      errors: errors.map(error => ({
+        message: error.error.message,
+        context: error.context,
+        severity: error.severity,
+        recoverable: error.recoverable,
+        timestamp: error.context.timestamp
+      })),
+      timestamp: new Date()
+    };
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(report, null, 2)
+        }
+      ]
+    };
+  }
+
+  private async getAllComponents(): Promise<ComponentInfo[]> {
+    this.performanceMonitor.startTimer('scan');
+    
+    try {
+      const cachedComponents = this.cache.getAllComponents();
+      if (cachedComponents.length > 0) {
+        this.performanceMonitor.updateCacheHitRate(1.0);
+        return cachedComponents;
+      }
+
+      this.performanceMonitor.updateCacheHitRate(0.0);
+      const filePaths = await this.scanner.scanForComponents();
+      this.performanceMonitor.endTimer('scan');
+      
+      this.performanceMonitor.startTimer('analysis');
+      const components: ComponentInfo[] = [];
+
+      for (const filePath of filePaths) {
+        try {
+          const component = await this.analyzer.analyzeComponent(filePath);
+          if (component) {
+            components.push(component);
+            this.cache.setComponent(component);
+            this.performanceMonitor.incrementComponentCount();
+          }
+        } catch (error) {
+          this.errorHandler.handleError(
+            error instanceof Error ? error : new Error(String(error)),
+            { 
+              operation: 'component_analysis', 
+              filePath, 
+              timestamp: new Date() 
+            },
+            'medium'
+          );
+          this.performanceMonitor.incrementErrorCount();
+        }
+      }
+
+      this.performanceMonitor.endTimer('analysis');
+      return components;
+    } catch (error) {
+      this.performanceMonitor.endTimer('scan');
+      this.errorHandler.handleError(
+        error instanceof Error ? error : new Error(String(error)),
+        { operation: 'get_all_components', timestamp: new Date() },
+        'high'
+      );
+      throw error;
+    }
   }
 
   public async start(): Promise<void> {
