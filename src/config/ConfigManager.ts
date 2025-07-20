@@ -140,26 +140,43 @@ export class ConfigManager {
     if (!supportedByFramework) return false;
 
     return this.config.componentPatterns.some(pattern => {
-      let regexPattern = pattern;
-      
-      regexPattern = regexPattern.replace(/\{([^}]+)\}/g, '($1)').replace(/,/g, '|');
-      
-      regexPattern = regexPattern.replace(/\*\*/g, '___DOUBLESTAR___');
-      regexPattern = regexPattern.replace(/\*/g, '___SINGLESTAR___');
-      
-      regexPattern = regexPattern.replace(/___DOUBLESTAR___/g, '.*');
-      regexPattern = regexPattern.replace(/___SINGLESTAR___/g, '[^/]*');
-      
-      regexPattern = regexPattern.replace(/\.(?![*])/g, '\\.');
-      
-      if (pattern.startsWith('**/')) {
-        regexPattern = '(^|.*/)' + regexPattern.substring(4);
-      }
-      
-      const regex = new RegExp(regexPattern);
-      const testPath = relativePath.startsWith('./') ? relativePath.substring(2) : relativePath;
-      
-      return regex.test(testPath) || regex.test(fileName);
+      return this.matchesGlobPattern(relativePath, fileName, pattern);
     });
   }
+
+  private matchesGlobPattern(relativePath: string, fileName: string, pattern: string): boolean {
+    const testPath = relativePath.startsWith('./') ? relativePath.substring(2) : relativePath;
+    
+    if (pattern.includes('{') && pattern.includes('}')) {
+      const braceMatch = pattern.match(/\{([^}]+)\}/);
+      if (braceMatch) {
+        const extensions = braceMatch[1].split(',');
+        const basePattern = pattern.replace(/\{[^}]+\}/, '');
+        
+        return extensions.some(ext => {
+          const expandedPattern = basePattern + ext.trim();
+          return this.matchesSimpleGlobPattern(testPath, fileName, expandedPattern);
+        });
+      }
+    }
+    
+    return this.matchesSimpleGlobPattern(testPath, fileName, pattern);
+  }
+
+  private matchesSimpleGlobPattern(testPath: string, fileName: string, pattern: string): boolean {
+    let regexPattern = pattern;
+    
+    regexPattern = regexPattern.replace(/\./g, '\\.');
+    
+    regexPattern = regexPattern.replace(/\*\*/g, '.*');
+    
+    regexPattern = regexPattern.replace(/\*/g, '[^/]*');
+    
+    regexPattern = '^' + regexPattern + '$';
+    
+    const regex = new RegExp(regexPattern);
+    
+    return regex.test(testPath) || regex.test(fileName);
+  }
+
 }

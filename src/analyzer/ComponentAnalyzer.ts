@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ConfigManager } from '../config/ConfigManager.js';
 import { ComponentInfo, PropInfo, StyleInfo } from '../types';
+import { ASTParser } from '../utils/ASTParser';
 
 export class ComponentAnalyzer {
   constructor(private configManager: ConfigManager) {}
@@ -90,6 +91,46 @@ export class ComponentAnalyzer {
   private extractProps(content: string): PropInfo[] {
     const props: PropInfo[] = [];
 
+    try {
+      const astParser = new ASTParser(content);
+      const interfaces = astParser.extractInterfaces();
+      const typeAliases = astParser.extractTypeAliases();
+
+      for (const interfaceInfo of interfaces) {
+        if (interfaceInfo.name.includes('Props')) {
+          for (const prop of interfaceInfo.properties) {
+            props.push({
+              name: prop.name,
+              type: prop.type,
+              required: !prop.optional,
+              description: undefined
+            });
+          }
+        }
+      }
+
+      for (const typeAlias of typeAliases) {
+        if (typeAlias.name.includes('Props') && typeAlias.type.includes('{')) {
+          const typeProps = this.parsePropsFromTypeString(typeAlias.type);
+          props.push(...typeProps);
+        }
+      }
+
+      if (props.length === 0) {
+        return this.extractPropsWithRegex(content);
+      }
+
+    } catch (error) {
+      console.warn('AST parsing failed, falling back to regex:', error);
+      return this.extractPropsWithRegex(content);
+    }
+
+    return props;
+  }
+
+  private extractPropsWithRegex(content: string): PropInfo[] {
+    const props: PropInfo[] = [];
+
     const interfaceRegex = /interface\s+(\w+Props)\s*{([^}]+)}/g;
     const typeRegex = /type\s+(\w+Props)\s*=\s*{([^}]+)}/g;
 
@@ -108,6 +149,12 @@ export class ComponentAnalyzer {
     }
 
     return props;
+  }
+
+  private parsePropsFromTypeString(typeString: string): PropInfo[] {
+    const props: PropInfo[] = [];
+    const content = typeString.replace(/^[^{]*{/, '').replace(/}[^}]*$/, '');
+    return this.parsePropsFromContent(content);
   }
 
   private parsePropsFromContent(propsContent: string): PropInfo[] {
