@@ -142,9 +142,12 @@ export interface CategoryInfo {
 export interface ScreenPattern {
   name: string;
   category: string;
-  structure: ComponentStructure;
+  framework: 'react-native' | 'tailwind' | 'unknown';
+  commonProps: PropInfo[];
   commonStyles: StyleInfo[];
-  usageExamples: string[];
+  usageFrequency: number;
+  examples: string[];
+  description: string;
 }
 
 export interface ComponentStructure {

@@ -8,7 +8,11 @@ import { ConfigManager } from '../config/ConfigManager.js';
 import { ComponentScanner } from '../scanner/ComponentScanner.js';
 import { ComponentAnalyzer } from '../analyzer/ComponentAnalyzer.js';
 import { ComponentCache } from '../cache/ComponentCache.js';
-import { ComponentInfo, ComponentSummary, ComponentMatch, DesignSystemInfo, CategoryInfo, ScreenPattern } from '../types';
+import { SimilarityAnalyzer } from '../analyzer/SimilarityAnalyzer.js';
+import { DesignSystemAnalyzer } from '../analyzer/DesignSystemAnalyzer.js';
+import { CategoryDetector } from '../analyzer/CategoryDetector.js';
+import { AdvancedCache } from '../cache/AdvancedCache.js';
+import { ComponentInfo, ComponentSummary, ComponentMatch, DesignSystemInfo, CategoryInfo, ScreenPattern } from '../types/index.js';
 
 export class MCPServer {
   private server: Server;
@@ -16,6 +20,10 @@ export class MCPServer {
   private scanner: ComponentScanner;
   private analyzer: ComponentAnalyzer;
   private cache: ComponentCache;
+  private advancedCache: AdvancedCache;
+  private similarityAnalyzer: SimilarityAnalyzer;
+  private designSystemAnalyzer: DesignSystemAnalyzer;
+  private categoryDetector: CategoryDetector;
 
   constructor() {
     this.server = new Server(
@@ -34,6 +42,10 @@ export class MCPServer {
     this.scanner = new ComponentScanner(this.configManager);
     this.analyzer = new ComponentAnalyzer(this.configManager);
     this.cache = new ComponentCache(this.configManager);
+    this.advancedCache = new AdvancedCache();
+    this.similarityAnalyzer = new SimilarityAnalyzer();
+    this.designSystemAnalyzer = new DesignSystemAnalyzer();
+    this.categoryDetector = new CategoryDetector();
 
     this.setupHandlers();
   }
@@ -220,53 +232,93 @@ export class MCPServer {
     }
 
     const components = await this.getAllComponents();
-    const matches: ComponentMatch[] = components
-      .filter(c => c.description?.toLowerCase().includes(args.description.toLowerCase()) ||
-                   c.name.toLowerCase().includes(args.description.toLowerCase()))
-      .map(component => ({
-        component,
-        similarity: 0.8, // Placeholder similarity score
-        matchReasons: ['Name similarity', 'Description match'],
-        differences: ['Different props structure']
-      }));
+    
+    const targetComponent = components.find(c => 
+      c.description?.toLowerCase().includes(args.description.toLowerCase()) ||
+      c.name.toLowerCase().includes(args.description.toLowerCase())
+    );
+
+    if (!targetComponent) {
+      const syntheticComponent: ComponentInfo = {
+        name: args.description,
+        filePath: '',
+        framework: 'unknown',
+        props: args.props ? args.props.map((name: string) => ({ name, type: 'unknown', required: false })) : [],
+        styles: [],
+        usageExamples: [],
+        dependencies: [],
+        category: 'general',
+        description: args.description,
+        lastModified: new Date()
+      };
+      
+      const matches = this.similarityAnalyzer.findSimilarComponents(syntheticComponent, components, 0.3, 10);
+      
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              searchQuery: args.description,
+              matches: matches.map(match => ({
+                component: {
+                  name: match.component.name,
+                  filePath: match.component.filePath,
+                  framework: match.component.framework,
+                  category: match.component.category
+                },
+                similarity: match.similarity,
+                matchReasons: match.matchReasons,
+                differences: match.differences
+              }))
+            }, null, 2)
+          }
+        ]
+      };
+    }
+
+    const matches = this.similarityAnalyzer.findSimilarComponents(targetComponent, components, 0.5, 10);
 
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(matches, null, 2)
+          text: JSON.stringify({
+            targetComponent: targetComponent.name,
+            matches: matches.map(match => ({
+              component: {
+                name: match.component.name,
+                filePath: match.component.filePath,
+                framework: match.component.framework,
+                category: match.component.category
+              },
+              similarity: match.similarity,
+              matchReasons: match.matchReasons,
+              differences: match.differences
+            }))
+          }, null, 2)
         }
       ]
     };
   }
 
   private async handleGetDesignSystem(args: any) {
-    const designSystem: DesignSystemInfo = {
-      colors: {
-        primary: [],
-        secondary: [],
-        neutral: [],
-        semantic: {
-          success: [],
-          warning: [],
-          error: [],
-          info: []
-        }
-      },
-      typography: {
-        fontSizes: {},
-        fontWeights: {},
-        lineHeights: {},
-        fontFamilies: {}
-      },
-      spacing: {
-        margins: {},
-        paddings: {},
-        gaps: {}
-      },
-      commonPatterns: [],
-      extractedAt: new Date()
-    };
+    const cacheKey = `design_system_${args.category || 'all'}`;
+    
+    let designSystem = this.advancedCache.get<DesignSystemInfo>(cacheKey);
+    
+    if (!designSystem) {
+      const components = await this.getAllComponents();
+      let filteredComponents = components;
+      
+      if (args.category) {
+        filteredComponents = components.filter(c => c.category === args.category);
+      }
+      
+      designSystem = this.designSystemAnalyzer.analyzeDesignSystem(filteredComponents);
+      
+      this.advancedCache.set(cacheKey, designSystem, 600000);
+    }
 
     return {
       content: [
@@ -308,16 +360,117 @@ export class MCPServer {
   }
 
   private async handleGetScreenPatterns(args: any) {
-    const patterns: ScreenPattern[] = [];
+    const components = await this.getAllComponents();
+    
+    // Filter for screen components
+    let screenComponents = components.filter(c => 
+      c.category === 'screens' || 
+      c.name.toLowerCase().includes('screen') ||
+      c.filePath.toLowerCase().includes('/screens/') ||
+      c.filePath.toLowerCase().includes('/pages/')
+    );
+
+    if (args.category) {
+      screenComponents = screenComponents.filter(c => c.category === args.category);
+    }
+
+    const patterns: ScreenPattern[] = screenComponents.map(component => ({
+      name: component.name,
+      category: component.category,
+      framework: component.framework,
+      commonProps: component.props.slice(0, 5),
+      commonStyles: component.styles.slice(0, 10),
+      usageFrequency: 1,
+      examples: [component.filePath],
+      description: component.description || `${component.name} screen pattern`
+    }));
+
+    const groupedPatterns = this.groupSimilarPatterns(patterns);
 
     return {
       content: [
         {
           type: 'text',
-          text: JSON.stringify(patterns, null, 2)
+          text: JSON.stringify({
+            totalPatterns: groupedPatterns.length,
+            patterns: groupedPatterns
+          }, null, 2)
         }
       ]
     };
+  }
+
+  private groupSimilarPatterns(patterns: ScreenPattern[]): ScreenPattern[] {
+    const grouped: ScreenPattern[] = [];
+    const processed = new Set<string>();
+
+    for (const pattern of patterns) {
+      if (processed.has(pattern.name)) continue;
+
+      const similar = patterns.filter(p => 
+        !processed.has(p.name) && 
+        p.category === pattern.category &&
+        p.framework === pattern.framework
+      );
+
+      if (similar.length > 1) {
+        const merged: ScreenPattern = {
+          name: `${pattern.category}_${pattern.framework}_pattern`,
+          category: pattern.category,
+          framework: pattern.framework,
+          commonProps: this.mergeProps(similar.map(p => p.commonProps)),
+          commonStyles: this.mergeStyles(similar.map(p => p.commonStyles)),
+          usageFrequency: similar.length,
+          examples: similar.map(p => p.examples).flat(),
+          description: `Common ${pattern.category} pattern for ${pattern.framework}`
+        };
+        grouped.push(merged);
+        
+        similar.forEach(p => processed.add(p.name));
+      } else {
+        grouped.push(pattern);
+        processed.add(pattern.name);
+      }
+    }
+
+    return grouped;
+  }
+
+  private mergeProps(propArrays: any[][]): any[] {
+    const propMap = new Map<string, any>();
+    
+    for (const props of propArrays) {
+      for (const prop of props) {
+        if (!propMap.has(prop.name)) {
+          propMap.set(prop.name, { ...prop, frequency: 1 });
+        } else {
+          propMap.get(prop.name)!.frequency++;
+        }
+      }
+    }
+    
+    return Array.from(propMap.values())
+      .sort((a, b) => b.frequency - a.frequency)
+      .slice(0, 5);
+  }
+
+  private mergeStyles(styleArrays: any[][]): any[] {
+    const styleMap = new Map<string, any>();
+    
+    for (const styles of styleArrays) {
+      for (const style of styles) {
+        const key = `${style.property}:${style.value}`;
+        if (!styleMap.has(key)) {
+          styleMap.set(key, { ...style, frequency: 1 });
+        } else {
+          styleMap.get(key)!.frequency++;
+        }
+      }
+    }
+    
+    return Array.from(styleMap.values())
+      .sort((a, b) => b.frequency - a.frequency)
+      .slice(0, 10);
   }
 
   private async getAllComponents(): Promise<ComponentInfo[]> {

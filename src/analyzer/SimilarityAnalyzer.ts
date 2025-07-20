@@ -11,7 +11,8 @@ export class SimilarityAnalyzer {
   public findSimilarComponents(
     targetComponent: ComponentInfo,
     allComponents: ComponentInfo[],
-    threshold: number = 0.3
+    threshold: number = 0.3,
+    maxResults?: number
   ): ComponentMatch[] {
     const matches: ComponentMatch[] = [];
 
@@ -33,7 +34,8 @@ export class SimilarityAnalyzer {
       }
     }
 
-    return matches.sort((a, b) => b.similarity - a.similarity);
+    const sortedMatches = matches.sort((a, b) => b.similarity - a.similarity);
+    return maxResults ? sortedMatches.slice(0, maxResults) : sortedMatches;
   }
 
   private calculateSimilarity(comp1: ComponentInfo, comp2: ComponentInfo): number {
